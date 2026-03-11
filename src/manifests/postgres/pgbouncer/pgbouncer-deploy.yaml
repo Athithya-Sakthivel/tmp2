@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-postgres-pooler
+  namespace: databases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-postgres-pooler
+  template:
+    metadata:
+      labels:
+        app: app-postgres-pooler
+    spec:
+      containers:
+        - name: pgbouncer
+          image: ghcr.io/cloudnative-pg/pgbouncer:1.25.1
+          args: ["/usr/bin/pgbouncer","/etc/pgbouncer/pgbouncer.ini"]
+          volumeMounts:
+            - name: pgbouncer-config
+              mountPath: /etc/pgbouncer
+      volumes:
+        - name: pgbouncer-config
+          configMap:
+            name: app-postgres-pgbouncer-config

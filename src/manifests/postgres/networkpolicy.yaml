@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-db-access
+  namespace: databases
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: app-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+        - namespaceSelector:\n            matchLabels:\n              app.kubernetes.io/namespace: train\n        - namespaceSelector:\n            matchLabels:\n              app.kubernetes.io/namespace: serve\n      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 8000

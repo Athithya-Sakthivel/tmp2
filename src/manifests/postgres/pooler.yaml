@@ -1,0 +1,18 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: app-postgres-pooler
+  namespace: databases
+spec:
+  cluster:
+    name: app-postgres
+  instances: 1
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      auth_type: "md5"
+      default_pool_size: "10"
+      max_client_conn: "200"
+      client_tls_sslmode: "disable"
+      server_tls_sslmode: "disable"
