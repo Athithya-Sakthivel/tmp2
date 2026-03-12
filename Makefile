@@ -31,7 +31,7 @@ test-iac-staging:
 	bash src/terraform/run.sh --delete --yes-delete --env staging
 
 lc:
-	kind delete cluster --name local-cluster && kind create cluster --name local-cluster && bash src/core/default_storage_class.sh
+	kind delete cluster --name local-cluster && kind create cluster --name local-cluster
 	
 tree:
 	tree -a -I '.git|.venv|.repos|__pycache__|venv|commands.sh|raw_data|.venv-pulumi|.venv2|archive|tmp.md|docs|models|tmp|raw|chunked'

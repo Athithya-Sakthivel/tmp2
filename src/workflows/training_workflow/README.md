@@ -1,230 +1,252 @@
-# Training Workflow
 
-## TL;DR
-```sh
-training_workflow/                     # Root directory containing the Flyte training pipeline implementation and runtime configuration.
-│
-├── Dockerfile.train                  # Container specification defining the reproducible runtime environment used by Flyte tasks during training execution.
-├── requirements.txt                  # Python dependency list used to build the training container with ML, data processing, validation, and registry libraries.
-├── flyte_training_workflow.py        # Flyte workflow definition that wires all training tasks into a DAG and specifies execution order, inputs, and outputs.
-│
-└── tasks/                            # Collection of individual Flyte task modules representing atomic pipeline steps executed in the workflow.
-    ├── extract_load_data.py          # Task that reads historical partitions from the offline data store and constructs the raw dataset snapshot for training.
-    ├── raw_data_validation.py        # Task that validates structural integrity of the raw dataset (schema, nulls, duplicates, timestamps) before transformations.
-    ├── ray_data_preprocessing.py     # Task that performs distributed feature engineering, joins, aggregations, and dataset splitting using Ray Data.
-    ├── feature_validation.py         # Task that validates engineered features for range correctness, categorical domains, and label distributions.
-    ├── train_and_evaluate_model.py   # Task that performs hyperparameter search, trains the candidate model, and evaluates it against validation metrics.
-    └── export_and_register_model.py  # Task that converts the trained model to ONNX, uploads artifacts to storage, and registers the model version in MLflow.
-```
 
-## Overview
 
-The **training workflow** is the automated pipeline responsible for producing deployable machine learning model artifacts. It orchestrates dataset extraction, validation, distributed preprocessing, model training, evaluation, and artifact registration.
-
-The workflow is executed and scheduled using **Flyte** and produces versioned model artifacts registered in **MLflow**. Feature processing is performed using **Ray Data**, and data quality validation is performed with **Great Expectations**.
-
-Outputs from this workflow are consumed by the deployment pipeline, which loads the exported model artifacts into the serving infrastructure.
-
----
-
-# Repository Structure
-
-```
-src/workflows/training_workflow/
-
-Dockerfile.train
-requirements.txt
-flyte_training_workflow.py
-
-tasks/
-    extract_load_data.py
-    raw_data_validation.py
-    ray_data_preprocessing.py
-    feature_validation.py
-    train_and_evaluate_model.py
-    export_and_register_model.py
-```
+Add the following sections to the README to extend **Workflow Responsibilities** and **Tasks** with precise definitions aligned to the actual task modules.
 
 ---
 
 # Workflow Responsibilities
 
-The training workflow performs the following responsibilities:
+The training workflow orchestrates the full model training lifecycle from dataset extraction to model registration. Each responsibility is implemented as an isolated **Flyte task**, enabling deterministic execution, retry isolation, and artifact lineage tracking.
 
-1. Extract historical data required for training.
-2. Validate raw datasets for schema and integrity.
-3. Perform distributed feature preprocessing.
-4. Validate engineered features and label distributions.
-5. Train and evaluate candidate models.
-6. Export the approved model artifact.
-7. Register the model version and metadata.
+Primary responsibilities:
 
-Each stage is implemented as an isolated **Flyte task** to ensure reproducibility, retry isolation, and artifact lineage.
+1. **Dataset Extraction**
 
----
+   Retrieve historical training data from the offline data store or data lake.
 
-# Execution Flow
+   * Read partitioned datasets.
+   * Load feature columns and labels.
+   * Construct a consistent dataset snapshot.
 
-The workflow executes tasks in the following order:
+2. **Raw Data Validation**
 
-```
-extract_load_data
-        ↓
-raw_data_validation
-        ↓
-ray_data_preprocessing
-        ↓
-feature_validation
-        ↓
-train_and_evaluate_model
-        ↓
-export_and_register_model
-```
+   Validate structural integrity of the dataset before transformations.
 
-The output of each task becomes the input to the next stage.
+   * Schema validation
+   * Null detection
+   * Duplicate primary key checks
+   * Timestamp sanity checks
+   * Partition completeness verification
+
+3. **Distributed Feature Engineering**
+
+   Transform raw datasets into model-ready features using distributed data processing.
+
+   * Feature joins
+   * Aggregations and rolling windows
+   * Feature normalization
+   * Categorical encoding
+   * Label construction
+
+4. **Feature Validation**
+
+   Ensure feature correctness after preprocessing.
+
+   * Value range validation
+   * Distribution sanity checks
+   * Domain validation for categorical features
+   * Label balance checks
+
+5. **Model Training and Evaluation**
+
+   Train candidate models and evaluate their performance.
+
+   * Hyperparameter optimization
+   * Model training
+   * Validation metric computation
+   * Model selection decision
+
+6. **Artifact Export**
+
+   Convert trained models into deployable inference artifacts.
+
+   * Export trained model to ONNX
+   * Persist artifacts to object storage
+
+7. **Model Registration**
+
+   Register model artifacts and metadata in the model registry.
+
+   * Create MLflow model version
+   * Store evaluation metrics
+   * Attach training metadata
 
 ---
 
 # Tasks
 
+Each task represents a deterministic unit of computation within the workflow DAG.
+
+Tasks operate on explicit inputs and outputs to ensure reproducibility.
+
+---
+
 ## extract_load_data
 
-### Purpose
+**Module**
 
-Extract training data from the offline data store and assemble the raw dataset snapshot used for training.
+```
+tasks/extract_load_data.py
+```
 
-### Responsibilities
+**Purpose**
 
-* Read historical partitions from the offline feature store or data lake.
-* Load required feature columns and labels.
-* Construct the raw dataset used for downstream preprocessing.
+Load historical data required for model training.
 
-### Inputs
+**Responsibilities**
 
-* Dataset time window
-* Feature schema version
-* Table or dataset identifiers
+* Read partitions from the offline dataset.
+* Select required feature columns.
+* Load label columns.
+* Construct the raw dataset snapshot.
 
-### Outputs
+**Inputs**
 
-* Raw dataset snapshot
-* Dataset metadata
+* dataset time range
+* dataset identifiers
+* feature schema version
+
+**Outputs**
+
+* raw dataset reference
+* dataset metadata
 
 ---
 
 ## raw_data_validation
 
-### Purpose
+**Module**
 
-Verify structural integrity of the raw dataset before performing transformations.
+```
+tasks/raw_data_validation.py
+```
 
-### Responsibilities
+**Purpose**
 
-Run data quality checks including:
+Verify dataset integrity before transformations.
 
-* Schema validation
-* Null checks
-* Duplicate primary key detection
-* Timestamp integrity validation
-* Partition completeness checks
+**Responsibilities**
 
-### Implementation
+Execute data validation checks including:
 
-Validation rules are executed using **Great Expectations**.
+* schema validation
+* null detection
+* duplicate key checks
+* timestamp validation
+* partition completeness
 
-### Failure Behavior
+**Implementation**
+
+Validation is executed using **Great Expectations**.
+
+**Failure Behavior**
 
 If validation fails, the workflow terminates and the failure is recorded in Flyte execution logs.
 
-### Outputs
+**Outputs**
 
-* Validation report
-* Verified dataset reference
+* validation report
+* validated dataset reference
 
 ---
 
 ## ray_data_preprocessing
 
-### Purpose
+**Module**
 
-Transform raw data into a model-ready dataset using distributed processing.
+```
+tasks/ray_data_preprocessing.py
+```
 
-### Responsibilities
+**Purpose**
 
-Feature engineering and dataset preparation including:
+Perform distributed dataset transformation and feature engineering.
 
-* Feature joins
-* Aggregations and rolling windows
-* Feature normalization
-* Categorical encoding
-* Label construction
-* Train/validation split generation
+**Responsibilities**
 
-### Implementation
+* feature joins
+* rolling aggregations
+* normalization
+* categorical encoding
+* label construction
+* dataset splitting
 
-Processing is executed using **Ray Data** for scalable distributed data transformation.
+**Implementation**
 
-### Outputs
+Distributed processing is executed using **Ray Data**.
 
-* Feature-engineered dataset
-* Training dataset
-* Validation dataset
+**Outputs**
+
+* engineered dataset
+* training split
+* validation split
 
 ---
 
 ## feature_validation
 
-### Purpose
+**Module**
 
-Validate engineered features before training.
+```
+tasks/feature_validation.py
+```
 
-### Responsibilities
+**Purpose**
 
-Ensure feature correctness after preprocessing.
+Ensure correctness of engineered features before training.
+
+**Responsibilities**
 
 Validation checks include:
 
-* Feature value ranges
-* Distribution sanity checks
-* Categorical domain validation
-* Label distribution verification
+* feature range validation
+* categorical domain verification
+* label distribution checks
+* statistical sanity validation
 
-### Implementation
+**Implementation**
 
-Validation is implemented using Great Expectations and additional statistical checks.
+Validation is implemented using **Great Expectations** combined with statistical checks.
 
-### Failure Behavior
+**Failure Behavior**
 
-If feature validation fails, the workflow stops before model training begins.
+If validation fails, training does not proceed.
 
-### Outputs
+**Outputs**
 
-* Validated feature dataset
-* Feature validation report
+* validated feature dataset
+* feature validation report
 
 ---
 
 ## train_and_evaluate_model
 
-### Purpose
+**Module**
 
-Train candidate models and evaluate performance.
+```
+tasks/train_and_evaluate_model.py
+```
 
-### Responsibilities
+**Purpose**
 
-* Perform hyperparameter search.
-* Train models on the prepared dataset.
-* Evaluate model performance on the validation dataset.
-* Compare candidate model performance against baseline metrics.
+Train candidate models and evaluate their performance.
 
-### Implementation
+**Responsibilities**
 
-Model training uses:
+* perform hyperparameter search
+* train models on training dataset
+* evaluate on validation dataset
+* compare performance against baseline
 
-* **FLAML** for hyperparameter optimization
-* **LightGBM** for gradient boosting model training
+**Implementation**
 
-### Evaluation Metrics
+Model training stack:
+
+* **FLAML** – hyperparameter optimization
+* **LightGBM** – gradient boosting model
+
+**Evaluation Metrics**
 
 Typical metrics include:
 
@@ -233,99 +255,46 @@ Typical metrics include:
 * Precision / Recall
 * RMSE
 
-### Outputs
+**Outputs**
 
-* Trained model artifact
-* Evaluation metrics
-* Promotion decision flag
+* trained model artifact
+* evaluation metrics
+* promotion decision flag
 
 ---
 
 ## export_and_register_model
 
-### Purpose
+**Module**
 
-Export the trained model as a deployable artifact and register it in the model registry.
+```
+tasks/export_and_register_model.py
+```
 
-### Responsibilities
+**Purpose**
 
-* Convert the trained model to ONNX format.
-* Upload the artifact to object storage.
-* Register a new model version in MLflow.
-* Attach metadata including training run identifiers and evaluation metrics.
+Produce deployable model artifacts and register them.
 
-### Implementation
+**Responsibilities**
 
-Models are exported for inference using **ONNX Runtime** compatible format.
+* convert trained model to ONNX
+* upload artifact to object storage
+* register model version in MLflow
+* attach training metadata
 
-### Outputs
+**Implementation**
+
+Artifacts are exported to **ONNX format** to enable runtime compatibility with inference services.
+
+**Outputs**
 
 * ONNX model artifact URI
 * MLflow model version
-* Training run metadata
+* training run metadata
 
 ---
 
-# Container Environment
+Pro tip: maintain strict task boundaries so each Flyte task performs **one atomic responsibility**. This keeps the workflow DAG stable and prevents cache invalidation from propagating across unrelated pipeline stages.
 
-## Dockerfile.train
+Confidence: 97%
 
-Defines the runtime container used by Flyte task execution.
-
-The container includes all dependencies required for:
-
-* distributed data processing
-* dataset validation
-* model training
-* model export
-* artifact registration
-
-The container image ensures consistent execution across development, CI pipelines, and production environments.
-
----
-
-# Dependencies
-
-## requirements.txt
-
-Defines the Python dependencies required by the training workflow.
-
-Typical dependency categories include:
-
-* workflow orchestration libraries
-* distributed data processing frameworks
-* machine learning libraries
-* dataset validation frameworks
-* artifact storage clients
-* model registry clients
-
-All dependencies are installed during container build and bundled in the training runtime image.
-
----
-
-# Artifacts Produced
-
-Each successful workflow execution produces the following artifacts:
-
-* raw dataset snapshot
-* preprocessing dataset outputs
-* validation reports
-* trained model artifact
-* evaluation metrics
-* ONNX model artifact
-* MLflow model version
-* training metadata
-
-Artifacts are stored in object storage and referenced by Flyte execution metadata.
-
----
-
-# Integration With Platform
-
-The training workflow integrates with other platform pipelines:
-
-* Feature ingestion workflows populate the offline dataset used for training.
-* Monitoring workflows detect model drift and trigger retraining.
-* Deployment workflows consume exported model artifacts and update serving infrastructure.
-
-These pipelines together form the end-to-end model lifecycle management system.

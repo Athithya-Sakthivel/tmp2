@@ -1,7 +1,6 @@
-# Reusable runtime image for executing Flyte tasks with dependencies from requirements.txt,
-# avoiding rebuilds for workflow code changes.
+# Flyte runtime image used by flyte training tasks, avoiding rebuilds on code changes, rebuilds only when requirements.txt change.
 
-ARG PYTHON_IMAGE=python:3.13.12-slim
+ARG PYTHON_IMAGE=python:3.11.8-slim
 
 FROM ${PYTHON_IMAGE} AS builder
 

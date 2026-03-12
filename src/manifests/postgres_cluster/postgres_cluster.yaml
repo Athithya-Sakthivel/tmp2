@@ -1,0 +1,21 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-cluster
+  namespace: default
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.13
+  bootstrap:
+    initdb:
+      postInitSQL:
+        - CREATE DATABASE flyte_admin;
+        - CREATE DATABASE flyte_propeller;
+        - CREATE DATABASE mlflow;
+        - CREATE DATABASE rising_wave;
+  storage:
+    storageClass: local-path
+    size: 20Gi
+  walStorage:
+    storageClass: local-path
+    size: 5Gi

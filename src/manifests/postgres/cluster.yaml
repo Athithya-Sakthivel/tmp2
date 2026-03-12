@@ -5,15 +5,15 @@ metadata:
   namespace: databases
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.3-minimal-trixie
+  imageName: docker.io/athithya5354/postgresql:16.10-minimal-trixie
   storage:
     size: 5Gi
     storageClass: local-path
     resizeInUseVolumes: true
   bootstrap:
     initdb:
-      database: postgres
-      owner: postgres
+      database: app
+      owner: app
   enableSuperuserAccess: true
   enablePDB: true
   resources:
@@ -23,36 +23,3 @@ spec:
     limits:
       cpu: "500m"
       memory: "1Gi"
-  postgresql:
-    parameters:
-      max_connections: "100"
-    pg_hba: []
-  superuserSecret:
-    name: app-postgres-superuser
-  managed:
-    roles:
-    - name: flyteadmin_user
-      ensure: present
-      login: true
-      superuser: false
-      passwordSecret:
-        name: cnpg-role-flyteadmin
-    - name: flytepropeller_user
-      ensure: present
-      login: true
-      superuser: false
-      passwordSecret:
-        name: cnpg-role-flytepropeller
-    - name: mlflow_user
-      ensure: present
-      login: true
-      superuser: false
-      passwordSecret:
-        name: cnpg-role-mlflow
-    - name: risingwave_user
-      ensure: present
-      login: true
-      superuser: false
-      passwordSecret:
-        name: cnpg-role-risingwave
-
